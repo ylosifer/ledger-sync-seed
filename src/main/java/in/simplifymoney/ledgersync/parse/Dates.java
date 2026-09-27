@@ -18,7 +18,11 @@ public final class Dates {
 
     public static final ZoneOffset IST = ZoneOffset.ofHoursMinutes(5, 30);
 
-    private static final List<DateTimeFormatter> SMS_FORMATS = List.of(
+    private static final List<DateTimeFormatter> FORMATS = List.of(
+            DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss Z", Locale.ENGLISH),
+            DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss", Locale.ENGLISH),
+            DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm Z", Locale.ENGLISH),
+            DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm", Locale.ENGLISH),
             DateTimeFormatter.ofPattern("dd-MM-yy HH:mm", Locale.ENGLISH),
             DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm", Locale.ENGLISH),
             DateTimeFormatter.ofPattern("dd MMM yy HH:mm", Locale.ENGLISH),
@@ -26,11 +30,17 @@ public final class Dates {
 
     /** Parse a local date-time written by a bank, as IST. */
     public static OffsetDateTime ist(String dateAndTime) {
-        for (DateTimeFormatter f : SMS_FORMATS) {
+        String trimmed = dateAndTime.trim();
+        for (DateTimeFormatter f : FORMATS) {
             try {
-                return LocalDateTime.parse(dateAndTime.trim(), f).atOffset(IST);
+                return LocalDateTime.parse(trimmed, f).atOffset(IST);
             } catch (DateTimeParseException ignored) {
-                // try the next shape
+                // try parsing with offset
+                try {
+                    return OffsetDateTime.parse(trimmed, f).withOffsetSameInstant(IST);
+                } catch (DateTimeParseException ignored2) {
+                    // try the next shape
+                }
             }
         }
         return null;
