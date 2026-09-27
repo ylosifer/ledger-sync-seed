@@ -33,11 +33,10 @@ public final class Dates {
         String trimmed = dateAndTime.trim();
         for (DateTimeFormatter f : FORMATS) {
             try {
-                return LocalDateTime.parse(trimmed, f).atOffset(IST);
+                return OffsetDateTime.parse(trimmed, f).withOffsetSameInstant(IST);
             } catch (DateTimeParseException ignored) {
-                // try parsing with offset
                 try {
-                    return OffsetDateTime.parse(trimmed, f).withOffsetSameInstant(IST);
+                    return LocalDateTime.parse(trimmed, f).atOffset(IST);
                 } catch (DateTimeParseException ignored2) {
                     // try the next shape
                 }

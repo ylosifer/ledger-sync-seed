@@ -14,6 +14,8 @@ import java.nio.file.Path;
  *   migrate                  apply db/migration/*.sql
  *   ingest  <corpus.jsonl>   read a corpus into the ledger
  *   report  <out-dir>        write ledger.json, summary.json, reconciliation.json
+ *   backfill                 migrate SQL ledger to DocumentStore
+ *   check                    verify consistency between SQL and DocumentStore
  */
 public final class App {
 
@@ -22,7 +24,7 @@ public final class App {
 
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
-            System.err.println("usage: migrate | ingest <corpus.jsonl> | report <out-dir>");
+            System.err.println("usage: migrate | ingest <corpus.jsonl> | report <out-dir> | backfill | check");
             System.exit(2);
         }
         Files.createDirectories(DB.getParent());
@@ -57,6 +59,33 @@ public final class App {
                     Files.writeString(out.resolve("reconciliation.json"),
                             Json.writePretty(Reports.reconciliation(ledger)));
                     System.out.println("wrote 3 files to " + out);
+                }
+            }
+            case "backfill" -> {
+                try (SqlLedgerStore store = new SqlLedgerStore(DB)) {
+                    store.migrate(MIGRATIONS);
+                    in.simplifymoney.ledgersync.store.DocumentStore docStore =
+                            new in.simplifymoney.ledgersync.store.InMemoryDocumentStore();
+                    in.simplifymoney.ledgersync.store.Backfill.Result res =
+                            new in.simplifymoney.ledgersync.store.Backfill(store, docStore).run();
+                    System.out.printf("Backfill complete: read %d, written %d, skipped %d%n",
+                            res.read(), res.written(), res.skipped());
+                }
+            }
+            case "check" -> {
+                try (SqlLedgerStore store = new SqlLedgerStore(DB)) {
+                    store.migrate(MIGRATIONS);
+                    in.simplifymoney.ledgersync.store.DocumentStore docStore =
+                            new in.simplifymoney.ledgersync.store.InMemoryDocumentStore();
+                    new in.simplifymoney.ledgersync.store.Backfill(store, docStore).run();
+                    var diffs = new in.simplifymoney.ledgersync.store.ConsistencyChecker(store, docStore).check();
+                    if (diffs.isEmpty()) {
+                        System.out.println("Consistency check passed: stores agree.");
+                    } else {
+                        System.out.printf("Consistency check found %d divergences:%n", diffs.size());
+                        diffs.forEach(d -> System.out.printf("  - %s: SQL='%s', Docs='%s'%n",
+                                d.what(), d.inSql(), d.inDocuments()));
+                    }
                 }
             }
             default -> {
